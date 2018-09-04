@@ -9,8 +9,8 @@ from daedisaggregator import DAEDisaggregator
 import metrics
 
 print("========== OPEN DATASETS ============")
-train = DataSet('ukdale.h5')
-test = DataSet('ukdale.h5')
+train = DataSet(r'c:\dev\nilmtk\data\ukdale\ukdale.h5')
+test = DataSet(r'c:\dev\nilmtk\data\ukdale\ukdale.h5')
 
 train.set_window(start="13-4-2013", end="1-1-2014")
 test.set_window(start="1-1-2014", end="30-3-2014")
@@ -44,7 +44,7 @@ print("Train =", end-start, "seconds.")
 
 
 print("========== DISAGGREGATE ============")
-disag_filename = "disag-out.h5"
+disag_filename = "microwave-disag-out.h5"
 output = HDFDataStore(disag_filename, 'w')
 dae.disaggregate(test_mains, output, test_meter, sample_period=sample_period)
 output.close()
