@@ -131,7 +131,17 @@ class DAEDisaggregator(Disaggregator):
             mainchunks[i] = next(mainps[i])
             meterchunks[i] = next(meterps[i])
         if self.mmax == None:
-            self.mmax = max([m.max() for m in mainchunks])
+            # fix error due to mainchuck empty
+            # ValueError: The truth value of a Series is ambiguous. Use a.empty, a.bool(), a.item(), a.any() or a.all().
+            max_temp = 0
+            for m in mainchunks:
+                if len(m) :
+                    if max_temp < m.max():
+                        max_temp = m.max()
+            self.mmax = max_temp                
+            # end fix
+            # Original code
+            #self.mmax = max([m.max() for m in mainchunks])
 
 
         run = True
@@ -165,7 +175,10 @@ class DAEDisaggregator(Disaggregator):
 
         for e in range(epochs):
             print(e)
-            batch_indexes = range(min(num_of_batches))
+            # fix error due to cannot assign a value to range type directly in python 3
+            # TypeError: 'range' object does not support item assignment
+            batch_indexes = list(range(min(num_of_batches)))
+            #batch_indexes = list(range(min(num_of_batches)))
             random.shuffle(batch_indexes)
 
             for bi, b in enumerate(batch_indexes):
