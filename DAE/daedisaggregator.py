@@ -97,6 +97,13 @@ class DAEDisaggregator(Disaggregator):
         # Replace NaNs with 0s
         mainchunk.fillna(0, inplace=True)
         meterchunk.fillna(0, inplace=True)
+        
+        # fix error due to timezone conflict as training dataset contain daylight saving
+        # and non daylight saving in the same timezone        
+        mainchunk.index = mainchunk.index.tz_convert('UTC')
+        meterchunk.index = meterchunk.index.tz_convert('UTC')
+        print("[daedisaggregator.py][train_on_chunk] timezone converted to UTC")
+        
         ix = mainchunk.index.intersection(meterchunk.index)
         mainchunk = mainchunk[ix]
         meterchunk = meterchunk[ix]
@@ -148,7 +155,7 @@ class DAEDisaggregator(Disaggregator):
         while(run):
             mainchunks = [self._normalize(m, self.mmax) for m in mainchunks]
             meterchunks = [self._normalize(m, self.mmax) for m in meterchunks]
-
+            
             self.train_across_buildings_chunk(mainchunks, meterchunks, epochs, batch_size)
             try:
                 for i in range(num_meters):
@@ -162,9 +169,18 @@ class DAEDisaggregator(Disaggregator):
         batch_size = int(batch_size/num_meters)
         num_of_batches = [None] * num_meters
         s = self.sequence_length
+        
         for i in range(num_meters):
+            
             mainchunks[i].fillna(0, inplace=True)
             meterchunks[i].fillna(0, inplace=True)
+            
+            # fix error due to timezone conflict as training dataset contain daylight saving
+            # and non daylight saving in the same timezone
+            mainchunks[i].index = mainchunks[i].index.tz_convert('UTC')
+            meterchunks[i].index = meterchunks[i].index.tz_convert('UTC')
+            print("[daedisaggregator.py][train_across_buildings_chunk] timezone converted to UTC")
+
             ix = mainchunks[i].index.intersection(meterchunks[i].index)
             m1 = mainchunks[i]
             m2 = meterchunks[i]
@@ -178,7 +194,7 @@ class DAEDisaggregator(Disaggregator):
             # fix error due to cannot assign a value to range type directly in python 3
             # TypeError: 'range' object does not support item assignment
             batch_indexes = list(range(min(num_of_batches)))
-            #batch_indexes = list(range(min(num_of_batches)))
+            #batch_indexes = range(min(num_of_batches))
             random.shuffle(batch_indexes)
 
             for bi, b in enumerate(batch_indexes):
@@ -217,6 +233,8 @@ class DAEDisaggregator(Disaggregator):
         **load_kwargs : key word arguments
             Passed to `mains.power_series(**kwargs)`
         '''
+        
+        print("[DAE][disaggregate]")
 
         load_kwargs = self._pre_disaggregation_checks(load_kwargs)
 
@@ -225,9 +243,11 @@ class DAEDisaggregator(Disaggregator):
 
         timeframes = []
         building_path = '/building{}'.format(mains.building())
+        print("[DAE][disaggregate] building_path = " + str(building_path))
         mains_data_location = building_path + '/elec/meter1'
+        print("[DAE][disaggregate] mains_data_location = " + str(mains_data_location))
         data_is_available = False
-
+        
         for chunk in mains.power_series(**load_kwargs):
             if len(chunk) < self.MIN_CHUNK_LENGTH:
                 continue
@@ -240,7 +260,8 @@ class DAEDisaggregator(Disaggregator):
             appliance_power = self.disaggregate_chunk(chunk2)
             appliance_power[appliance_power < 0] = 0
             appliance_power = self._denormalize(appliance_power, self.mmax)
-
+            #print("[appliance_power]")
+            #print(appliance_power)
             # Append prediction to output
             data_is_available = True
             cols = pd.MultiIndex.from_tuples([chunk.name])
@@ -249,10 +270,14 @@ class DAEDisaggregator(Disaggregator):
                 appliance_power.values, index=appliance_power.index,
                 columns=cols, dtype="float32")
             key = '{}/elec/meter{}'.format(building_path, meter_instance)
+            #print("key = "+str(key))
+            df = df.tz_localize(None)
             output_datastore.append(key, df)
 
             # Append aggregate data to output
             mains_df = pd.DataFrame(chunk, columns=cols, dtype="float32")
+            #print("mains_data_location = " + str(mains_data_location))
+            mains_df = mains_df.tz_localize(None)
             output_datastore.append(key=mains_data_location, value=mains_df)
 
         # Save metadata to output
@@ -294,6 +319,7 @@ class DAEDisaggregator(Disaggregator):
         appliance_powers_dict = {}
         appliance_powers_dict[0] = column
         appliance_powers = pd.DataFrame(appliance_powers_dict)
+        #print(appliance_powers)
         return appliance_powers
 
 

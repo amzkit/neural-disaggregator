@@ -88,6 +88,13 @@ class WindowGRUDisaggregator(Disaggregator):
         # Replace NaNs with 0s
         mainchunk.fillna(0, inplace=True)
         meterchunk.fillna(0, inplace=True)
+        
+        # fix error due to timezone conflict as training dataset contain daylight saving
+        # and non daylight saving in the same timezone
+        mainchunk.index = mainchunk.index.tz_convert('UTC')
+        meterchunk.index = meterchunk.index.tz_convert('UTC')
+        print("[windowgrudisaggregator.py][train_on_chunk] timezone converted to UTC")
+
         ix = mainchunk.index.intersection(meterchunk.index)
         mainchunk = np.array(mainchunk[ix])
         meterchunk = np.array(meterchunk[ix])
@@ -131,8 +138,17 @@ class WindowGRUDisaggregator(Disaggregator):
             mainchunks[i] = next(mainps[i])
             meterchunks[i] = next(meterps[i])
         if self.mmax == None:
-            self.mmax = max([m.max() for m in mainchunks])
-
+            # fix error due to mainchuck empty
+            # ValueError: The truth value of a Series is ambiguous. Use a.empty, a.bool(), a.item(), a.any() or a.all().
+            max_temp = 0
+            for m in mainchunks:
+                if len(m) :
+                    if max_temp < m.max():
+                        max_temp = m.max()
+            self.mmax = max_temp                
+            # end fix
+            # Original code
+            #self.mmax = max([m.max() for m in mainchunks])
 
         run = True
         while(run):
@@ -169,6 +185,13 @@ class WindowGRUDisaggregator(Disaggregator):
         for i in range(num_meters):
             mainchunks[i].fillna(0, inplace=True)
             meterchunks[i].fillna(0, inplace=True)
+            
+            # fix error due to timezone conflict as training dataset contain daylight saving
+            # and non daylight saving in the same timezone
+            mainchunks[i].index = mainchunks[i].index.tz_convert('UTC')
+            meterchunks[i].index = meterchunks[i].index.tz_convert('UTC')
+            print("[windowgrudisaggregator.py][train_across_buildings_chunk] timezone converted to UTC")
+            
             ix = mainchunks[i].index.intersection(meterchunks[i].index)
             m1 = mainchunks[i]
             m2 = meterchunks[i]
@@ -183,7 +206,10 @@ class WindowGRUDisaggregator(Disaggregator):
 
         for e in range(epochs): # Iterate for every epoch
             print(e)
-            batch_indexes = range(min(num_of_batches))
+            # fix error due to cannot assign a value to range type directly in python 3
+            # TypeError: 'range' object does not support item assignment
+            batch_indexes = list(range(min(num_of_batches)))
+            #batch_indexes = range(min(num_of_batches))
             random.shuffle(batch_indexes)
 
             for bi, b in enumerate(batch_indexes): # Iterate for every batch
